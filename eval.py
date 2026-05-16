@@ -399,12 +399,18 @@ def run_one_object(
     images_t = images_t.to(cfg.device)
 
     # ── 2. Run InstantMesh: planes → mesh ────────────────────────────────────
+    # autocast only covers forward_planes (encoder + transformer).
+    # extract_mesh() runs FlexiCubes geometry prediction which has scatter/index
+    # ops that require float32 — mixing dtypes causes index_add_() dtype errors.
     autocast_ctx = (
         torch.autocast(device_type="cuda", dtype=torch.bfloat16)
         if cfg.device == "cuda" else contextlib.nullcontext()
     )
-    with torch.no_grad(), autocast_ctx:
-        planes = model.forward_planes(images_t, input_cameras)
+    with torch.no_grad():
+        with autocast_ctx:
+            planes = model.forward_planes(images_t, input_cameras)
+        # Back to float32 for FlexiCubes mesh extraction
+        planes = planes.float()
         vertices_np, faces_np, vertex_colors_np = model.extract_mesh(
             planes,
             use_texture_map=False,
