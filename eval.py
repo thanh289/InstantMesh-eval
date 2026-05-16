@@ -368,6 +368,9 @@ def _base_row(cfg: EvalConfig, idx: int, object_id: str) -> dict:
 def numpy_to_trimesh(vertices: np.ndarray, faces: np.ndarray,
                      vertex_colors: np.ndarray) -> trimesh.Trimesh:
     """Convert InstantMesh extract_mesh() output to a trimesh.Trimesh."""
+    
+    vertices = vertices[:, [0, 2, 1]].copy()
+    vertices[:, 2] *= -1
     mesh = trimesh.Trimesh(
         vertices=vertices,
         faces=faces,

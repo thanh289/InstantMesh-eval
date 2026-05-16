@@ -69,10 +69,25 @@ def trimesh_to_pytorch3d(mesh: trimesh.Trimesh, device: str, flip_uv_y: bool = T
 
     if texture is None:
         try:
-            vc = np.asarray(mesh.visual.to_color().vertex_colors[:, :3], dtype=np.float32) / 255.0
-            if vc.shape[0] == verts.shape[0]:
-                vertex_colors = torch.as_tensor(vc, dtype=torch.float32, device=device)
-                texture = TexturesVertex(verts_features=[vertex_colors])
+            visual = mesh.visual
+            # ColorVisuals (InstantMesh output with use_texture_map=False) exposes
+            # vertex_colors directly; TextureVisuals needs .to_color() first.
+            if hasattr(visual, "vertex_colors") and visual.vertex_colors is not None:
+                raw_vc = visual.vertex_colors
+            elif hasattr(visual, "to_color"):
+                raw_vc = visual.to_color().vertex_colors
+            else:
+                raw_vc = None
+
+            if raw_vc is not None:
+                vc = np.asarray(raw_vc, dtype=np.float32)
+                # vertex_colors can be (N,3) uint8, (N,4) uint8, or already float
+                if vc.max() > 1.0:
+                    vc = vc / 255.0
+                vc = vc[:, :3]  # drop alpha channel if present
+                if vc.shape[0] == verts.shape[0]:
+                    vertex_colors = torch.as_tensor(vc, dtype=torch.float32, device=device)
+                    texture = TexturesVertex(verts_features=[vertex_colors])
         except Exception as exc:
             print("Vertex color fallback failed:", repr(exc))
             texture = None
